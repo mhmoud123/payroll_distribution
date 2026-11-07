@@ -1,0 +1,232 @@
+{
+ "actions": [],
+ "creation": "2026-11-03 09:00:00.000000",
+ "doctype": "DocType",
+ "document_type": "Other",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "calculation_section",
+  "days_per_month",
+  "hours_per_day",
+  "column_break_calc",
+  "overtime_multiplier",
+  "difference_tolerance",
+  "components_section",
+  "basic_component",
+  "overtime_component",
+  "absence_component",
+  "column_break_comp",
+  "lateness_component",
+  "other_deduction_component",
+  "advance_component",
+  "create_salary_components",
+  "gosi_section",
+  "gosi_component",
+  "gosi_country",
+  "column_break_gosi",
+  "gosi_employee_rate",
+  "gosi_employer_rate",
+  "gosi_salary_cap",
+  "accounting_section",
+  "payroll_payable_account",
+  "column_break_acc",
+  "journal_entry_per"
+ ],
+ "fields": [
+  {
+   "fieldname": "calculation_section",
+   "fieldtype": "Section Break",
+   "label": "Calculation"
+  },
+  {
+   "default": "30",
+   "description": "Daily rate = monthly salary ÷ this number.",
+   "fieldname": "days_per_month",
+   "fieldtype": "Int",
+   "label": "Days per Month",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "default": "8",
+   "description": "Hourly rate = daily rate ÷ this number.",
+   "fieldname": "hours_per_day",
+   "fieldtype": "Float",
+   "label": "Hours per Day",
+   "non_negative": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_calc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "1 matches the legacy screen. Saudi Labor Law Article 107 pays the hourly wage plus 50% of the basic hourly wage, so confirm the right value with the client.",
+   "fieldname": "overtime_multiplier",
+   "fieldtype": "Float",
+   "label": "Overtime Multiplier",
+   "non_negative": 1
+  },
+  {
+   "default": "0.01",
+   "description": "Differences smaller than this are treated as zero.",
+   "fieldname": "difference_tolerance",
+   "fieldtype": "Currency",
+   "label": "Difference Tolerance",
+   "non_negative": 1
+  },
+  {
+   "description": "The salary components the entry screen fills in. Use the button to create them with their formulas, then add their accounts and put them in your Salary Structures.",
+   "fieldname": "components_section",
+   "fieldtype": "Section Break",
+   "label": "Salary Components"
+  },
+  {
+   "fieldname": "basic_component",
+   "fieldtype": "Link",
+   "label": "Inclusive Salary Component",
+   "options": "Salary Component"
+  },
+  {
+   "description": "Posted to cost centers by overtime hours. Every other earning is posted by days.",
+   "fieldname": "overtime_component",
+   "fieldtype": "Link",
+   "label": "Overtime Component",
+   "options": "Salary Component"
+  },
+  {
+   "fieldname": "absence_component",
+   "fieldtype": "Link",
+   "label": "Absence Component",
+   "options": "Salary Component"
+  },
+  {
+   "fieldname": "column_break_comp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "lateness_component",
+   "fieldtype": "Link",
+   "label": "Lateness Component",
+   "options": "Salary Component"
+  },
+  {
+   "fieldname": "other_deduction_component",
+   "fieldtype": "Link",
+   "label": "Other Deduction Component",
+   "options": "Salary Component"
+  },
+  {
+   "fieldname": "advance_component",
+   "fieldtype": "Link",
+   "label": "Advance Deduction Component",
+   "options": "Salary Component"
+  },
+  {
+   "fieldname": "create_salary_components",
+   "fieldtype": "Button",
+   "label": "Create Salary Components"
+  },
+  {
+   "fieldname": "gosi_section",
+   "fieldtype": "Section Break",
+   "label": "GOSI"
+  },
+  {
+   "fieldname": "gosi_component",
+   "fieldtype": "Link",
+   "label": "GOSI Employee Component",
+   "options": "Salary Component"
+  },
+  {
+   "default": "Saudi Arabia",
+   "description": "Employees whose nationality is this country pay GOSI.",
+   "fieldname": "gosi_country",
+   "fieldtype": "Link",
+   "label": "GOSI Nationality",
+   "options": "Country"
+  },
+  {
+   "fieldname": "column_break_gosi",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "gosi_employee_rate",
+   "fieldtype": "Percent",
+   "label": "GOSI Employee Rate"
+  },
+  {
+   "description": "Calculated on each slip and posted to the GOSI accounts set on the Company.",
+   "fieldname": "gosi_employer_rate",
+   "fieldtype": "Percent",
+   "label": "GOSI Employer Rate"
+  },
+  {
+   "default": "45000",
+   "description": "GOSI is calculated on the monthly salary up to this amount. Leave 0 for no cap.",
+   "fieldname": "gosi_salary_cap",
+   "fieldtype": "Currency",
+   "label": "GOSI Salary Cap",
+   "non_negative": 1
+  },
+  {
+   "fieldname": "accounting_section",
+   "fieldtype": "Section Break",
+   "label": "Accounting"
+  },
+  {
+   "description": "Leave empty to use the company's Default Payroll Payable Account.",
+   "fieldname": "payroll_payable_account",
+   "fieldtype": "Link",
+   "label": "Payroll Payable Account",
+   "options": "Account"
+  },
+  {
+   "fieldname": "column_break_acc",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Month",
+   "description": "Post Month creates one journal entry for all posted slips, or one per employee.",
+   "fieldname": "journal_entry_per",
+   "fieldtype": "Select",
+   "label": "Journal Entry per",
+   "options": "Month\nEmployee"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-11-07 18:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Payroll Distribution",
+ "name": "Payroll Distribution Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "HR Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "HR User"
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}

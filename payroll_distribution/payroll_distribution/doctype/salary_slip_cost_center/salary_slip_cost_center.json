@@ -1,0 +1,92 @@
+{
+ "actions": [],
+ "creation": "2026-11-03 09:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "cost_center",
+  "basic_days",
+  "basic_amount",
+  "column_break_ot",
+  "ot_hours",
+  "ot_amount",
+  "row_total",
+  "follow_salary_details"
+ ],
+ "fields": [
+  {
+   "columns": 3,
+   "fieldname": "cost_center",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Cost Center",
+   "options": "Cost Center",
+   "reqd": 1
+  },
+  {
+   "columns": 1,
+   "fieldname": "basic_days",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Days",
+   "non_negative": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "basic_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Days Value",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_ot",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 1,
+   "fieldname": "ot_hours",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Overtime Hours",
+   "non_negative": 1
+  },
+  {
+   "columns": 2,
+   "fieldname": "ot_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Overtime Value",
+   "read_only": 1
+  },
+  {
+   "fieldname": "row_total",
+   "fieldtype": "Currency",
+   "label": "Total",
+   "read_only": 1
+  },
+  {
+   "columns": 1,
+   "default": "0",
+   "description": "When this is the employee's only row, its days and overtime hours follow the salary details automatically.",
+   "fieldname": "follow_salary_details",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Auto"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-11-03 09:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Payroll Distribution",
+ "name": "Salary Slip Cost Center",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

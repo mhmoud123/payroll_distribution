@@ -1,0 +1,41 @@
+[project]
+name = "payroll_distribution"
+authors = [
+    { name = "GoLive Solutions", email = "mhmoud.soliman100@gmail.com"}
+]
+description = "Monthly salary entry with per-employee cost center distribution for Frappe HRMS v15"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+dependencies = [
+    # "frappe~=15.0.0" # Installed and managed by bench.
+]
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.bench.frappe-dependencies]
+frappe = ">=15.0.0,<17.0.0"
+erpnext = ">=15.0.0,<17.0.0"
+hrms = ">=15.0.0,<17.0.0"
+
+[deploy.dependencies.apt]
+packages = []
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "I", "UP", "B", "RUF"]
+ignore = [
+    "B017", "B018", "B023", "B904", "E101", "E402", "E501", "E741",
+    "F401", "F403", "F405", "F722", "W191", "UP030", "UP031", "UP032", "UP037", "UP040",
+]
+typing-modules = ["frappe.types.DF"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "tab"
+docstring-code-format = true
