@@ -1,0 +1,5 @@
+*.pyc
+__pycache__/
+.ruff_cache/
+payroll_distribution/public/dist/
+node_modules/

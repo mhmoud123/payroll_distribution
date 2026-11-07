@@ -1,0 +1,263 @@
+# Copyright (c) 2026, GoLive Solutions and contributors
+# For license information, please see license.txt
+
+"""Journal entries for posted salary slips, split by cost center.
+
+A Salary Slip posts nothing to the ledger on its own in HRMS v16; normally Payroll Entry does it.
+This app doesn't use Payroll Entry, so posting a slip (or a month) creates the entry here:
+
+- earnings: debit each component's account, split by cost center (overtime by hours, the rest by days)
+- deductions: credit each component's account; profit-and-loss accounts are split by days, advance
+  recoveries credit the Employee Advance account with a reference so HRMS marks the advance returned
+- employer contributions: debit the expense account by days, credit the liability account
+- the balance (net pay) is credited to Payroll Payable with the employee as party
+"""
+
+import frappe
+from frappe import _
+from frappe.utils import flt, format_date
+
+from payroll_distribution.utils import get_settings, split_amount
+
+
+def make_journal_entry(slips):
+	"""Create and submit one Journal Entry for the given submitted salary slips (same company)."""
+	slips = list(slips)
+	if not slips:
+		return None
+	company = slips[0].company
+	if any(s.company != company for s in slips):
+		frappe.throw(_("Salary slips of different companies cannot share one journal entry."))
+
+	company_currency = frappe.get_cached_value("Company", company, "default_currency")
+	for slip in slips:
+		if slip.currency and slip.currency != company_currency:
+			frappe.throw(
+				_(
+					"Salary Slip {0} is in {1}. Only salaries in the company currency ({2}) can be posted from here."
+				).format(slip.name, slip.currency, company_currency)
+			)
+
+	precision = frappe.get_precision("Journal Entry Account", "debit_in_account_currency") or 2
+	accounts = []
+	for slip in slips:
+		accounts.extend(get_slip_accounts(slip, precision))
+
+	je = frappe.new_doc("Journal Entry")
+	je.voucher_type = "Journal Entry"
+	je.company = company
+	je.posting_date = max(s.posting_date for s in slips)
+	period = f"{format_date(slips[0].start_date)} - {format_date(slips[0].end_date)}"
+	if len(slips) == 1:
+		je.title = _("Salary {0} - {1}").format(slips[0].employee_name or slips[0].employee, period)
+	else:
+		je.title = _("Salaries {0} ({1} employees)").format(period, len(slips))
+	je.user_remark = _("Salary slips: {0}").format(", ".join(s.name for s in slips))
+	je.set("accounts", accounts)
+	je.flags.ignore_permissions = True
+	je.insert()
+	je.submit()
+
+	for slip in slips:
+		frappe.db.set_value("Salary Slip", slip.name, "journal_entry", je.name, update_modified=False)
+		slip.journal_entry = je.name
+	return je
+
+
+def get_slip_accounts(slip, precision):
+	settings = get_settings()
+	company = slip.company
+	default_cost_center = frappe.get_cached_value("Company", company, "cost_center")
+	rows = slip.get("custom_cost_centers") or []
+
+	day_weights = [(r.cost_center, r.basic_days) for r in rows]
+	hour_weights = [(r.cost_center, r.ot_hours) for r in rows]
+	value_weights = [(r.cost_center, r.row_total) for r in rows]
+
+	def weights_for(component):
+		if component == settings.overtime_component and sum(flt(w) for _c, w in hour_weights) > 0:
+			return hour_weights
+		for weights in (day_weights, value_weights):
+			if sum(flt(w) for _c, w in weights) > 0:
+				return weights
+		return [(default_cost_center, 1)]
+
+	def row(account, cost_center, debit=0.0, credit=0.0, **extra):
+		values = {
+			"account": account,
+			"cost_center": cost_center,
+			"debit_in_account_currency": flt(debit, precision),
+			"credit_in_account_currency": flt(credit, precision),
+			"user_remark": slip.name,
+		}
+		values.update(extra)
+		return values
+
+	accounts = []
+	debit_total = credit_total = 0.0
+
+	for earning in slip.get("earnings") or []:
+		if not counts_in_accounts(earning):
+			continue
+		account = get_component_account(earning.salary_component, company)
+		for cost_center, amount in split_amount(
+			earning.amount, weights_for(earning.salary_component), precision
+		):
+			accounts.append(row(account, cost_center, debit=amount))
+			debit_total += amount
+
+	advances = get_advance_recoveries(slip)
+	for deduction in slip.get("deductions") or []:
+		if not counts_in_accounts(deduction):
+			continue
+		amount = flt(deduction.amount, precision)
+		advance = advances.get(deduction.additional_salary)
+		if advance:
+			accounts.append(
+				row(
+					advance.advance_account,
+					default_cost_center,
+					credit=amount,
+					party_type="Employee",
+					party=slip.employee,
+					reference_type="Employee Advance",
+					reference_name=advance.employee_advance,
+				)
+			)
+		else:
+			account = get_component_account(deduction.salary_component, company)
+			if is_profit_and_loss(account):
+				for cost_center, part in split_amount(
+					amount, weights_for(deduction.salary_component), precision
+				):
+					accounts.append(row(account, cost_center, credit=part))
+			else:
+				accounts.append(row(account, default_cost_center, credit=amount))
+		credit_total += amount
+
+	for contribution in slip.get("employer_contributions") or []:
+		if not counts_in_accounts(contribution):
+			continue
+		expense_account, liability_account = get_component_account(
+			contribution.salary_component, company, with_liability=True
+		)
+		amount = flt(contribution.amount, precision)
+		for cost_center, part in split_amount(amount, weights_for(contribution.salary_component), precision):
+			accounts.append(row(expense_account, cost_center, debit=part))
+		accounts.append(row(liability_account, default_cost_center, credit=amount))
+
+	payable = flt(debit_total - credit_total, precision)
+	if payable:
+		payable_account = get_payroll_payable_account(company)
+		accounts.append(
+			row(
+				payable_account,
+				default_cost_center,
+				credit=payable if payable > 0 else 0,
+				debit=-payable if payable < 0 else 0,
+				party_type="Employee",
+				party=slip.employee,
+			)
+		)
+	return accounts
+
+
+def counts_in_accounts(detail):
+	"""Same rule Payroll Entry uses: skip zero and statistical lines, and lines kept out of totals and accounts."""
+	if not flt(detail.amount) or detail.get("statistical_component"):
+		return False
+	if detail.get("do_not_include_in_total") and detail.get("do_not_include_in_accounts"):
+		return False
+	return True
+
+
+def get_component_account(component, company, with_liability=False):
+	values = frappe.db.get_value(
+		"Salary Component Account",
+		{"parent": component, "parenttype": "Salary Component", "company": company},
+		["account", "liability_account"],
+		as_dict=True,
+	)
+	if not values or not values.account:
+		frappe.throw(
+			_("Set the account for salary component {0} for company {1} before posting.").format(
+				frappe.bold(component), frappe.bold(company)
+			),
+			title=_("Missing Account"),
+		)
+	if with_liability:
+		if not values.liability_account:
+			frappe.throw(
+				_(
+					"Set the liability account for employer contribution {0} for company {1} before posting."
+				).format(frappe.bold(component), frappe.bold(company)),
+				title=_("Missing Account"),
+			)
+		return values.account, values.liability_account
+	return values.account
+
+
+def get_payroll_payable_account(company):
+	account = get_settings().payroll_payable_account or frappe.get_cached_value(
+		"Company", company, "default_payroll_payable_account"
+	)
+	if not account:
+		frappe.throw(
+			_(
+				"Set the Default Payroll Payable Account for company {0}, or set one in Payroll Distribution Settings."
+			).format(frappe.bold(company)),
+			title=_("Missing Account"),
+		)
+	return account
+
+
+def is_profit_and_loss(account):
+	return frappe.get_cached_value("Account", account, "report_type") == "Profit and Loss"
+
+
+def get_advance_recoveries(slip):
+	"""Employee Advances recovered by this slip, keyed by the Additional Salary that recovers them."""
+	names = [d.additional_salary for d in slip.get("deductions") or [] if d.get("additional_salary")]
+	if not names:
+		return {}
+	AdditionalSalary = frappe.qb.DocType("Additional Salary")
+	EmployeeAdvance = frappe.qb.DocType("Employee Advance")
+	rows = (
+		frappe.qb.from_(AdditionalSalary)
+		.join(EmployeeAdvance)
+		.on(AdditionalSalary.ref_docname == EmployeeAdvance.name)
+		.select(
+			AdditionalSalary.name.as_("additional_salary"),
+			EmployeeAdvance.name.as_("employee_advance"),
+			EmployeeAdvance.advance_account,
+		)
+		.where(AdditionalSalary.name.isin(names))
+		.where(AdditionalSalary.ref_doctype == "Employee Advance")
+	).run(as_dict=True)
+	return {r.additional_salary: r for r in rows}
+
+
+def cancel_journal_entry_for_slip(slip):
+	"""Cancel the slip's journal entry. If the entry also covered other slips, post them again in a new entry."""
+	je_name = slip.journal_entry or frappe.db.get_value("Salary Slip", slip.name, "journal_entry")
+	if not je_name or frappe.db.get_value("Journal Entry", je_name, "docstatus") != 1:
+		return
+
+	others = frappe.get_all(
+		"Salary Slip",
+		filters={"journal_entry": je_name, "docstatus": 1, "name": ("!=", slip.name)},
+		pluck="name",
+	)
+	je = frappe.get_doc("Journal Entry", je_name)
+	je.flags.ignore_links = True
+	je.flags.ignore_permissions = True
+	je.cancel()
+
+	if others:
+		new_je = make_journal_entry([frappe.get_doc("Salary Slip", name) for name in others])
+		frappe.msgprint(
+			_(
+				"Journal Entry {0} was cancelled. The other {1} salary slips in it were posted again in {2}."
+			).format(frappe.bold(je_name), len(others), frappe.bold(new_je.name)),
+			alert=True,
+		)

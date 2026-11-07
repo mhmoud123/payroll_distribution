@@ -1,0 +1,200 @@
+"1 matches the legacy screen. Saudi Labor Law Article 107 pays the hourly wage plus 50% of the basic hourly wage, so confirm the right value with the client.",القيمة 1 تطابق الشاشة القديمة. المادة 107 من نظام العمل السعودي تنص على أجر الساعة مضافاً إليه 50% من أجر الساعة الأساسي، لذا تأكد من القيمة الصحيحة مع العميل.
+A posted salary slip can't be deleted.,لا يمكن حذف راتب مرحَّل.
+Absence,الغياب
+Absence Component,بند الغياب
+Absence Days,أيام الغياب
+Absence Days cannot be more than {0}.,لا يمكن أن تزيد أيام الغياب عن {0}.
+Absence days x daily rate.,أيام الغياب × أجر اليوم.
+Accounting,الحسابات
+Add a cost center row first.,أضف سطر مركز تكلفة أولاً.
+Administrative,إداري
+Advance,السلفة
+Advance Deduction,خصم السلفة
+Advance Deduction Component,بند خصم السلفة
+All salary components already exist.,جميع بنود الراتب موجودة مسبقاً.
+Amount,المجموع,Payroll Distribution
+Amount entered on the Monthly Salary Entry page.,المبلغ المُدخل في شاشة إدخال الرواتب الشهرية.
+April,أبريل
+Assign Remaining,توزيع الباقي
+August,أغسطس
+Auto,تلقائي
+Calculation,طريقة الحساب
+Calculation Parameters,معاملات الحساب
+Changed by Someone Else,تم التعديل من مستخدم آخر
+Choose a company.,اختر الشركة.
+"Choose a month and an employee, or use Next to go through the month's employees.",اختر الشهر والموظف، أو استخدم زر التالي للتنقل بين موظفي الشهر.
+Choose a valid month and year.,اختر شهراً وسنة صحيحين.
+"Choose the company, month and year first.",اختر الشركة والشهر والسنة أولاً.
+Component,البند
+Cost Center Distribution,التوزيع على مراكز التكلفة
+Cost Centers,مراكز التكلفة
+Create Salary Components,إنشاء بنود الراتب
+Create Salary Slip,إنشاء راتب
+Created salary components: {0}. Add their accounts for each company before posting.,تم إنشاء بنود الراتب: {0}. أضف حساباتها لكل شركة قبل الترحيل.
+Created {0} draft salary slips.,تم إنشاء {0} مسودة راتب.
+Daily Rate,أجر اليوم
+Daily rate = monthly salary ÷ this number.,أجر اليوم = الراتب الشهري ÷ هذا الرقم.
+Days,الأيام
+Days Basis,أساس الأيام
+Days Value,قيمة الأيام
+Days per Month,أيام الشهر
+Days per Month must be greater than zero.,يجب أن تكون أيام الشهر أكبر من صفر.
+December,ديسمبر
+Deductions,الحسميات,Payroll Distribution
+Delete Salary Slip,حذف الراتب
+Delete the salary slip of {0} for this month?,حذف راتب {0} لهذا الشهر؟
+Deleted,تم الحذف
+Difference,الفرق
+Difference (Distribution - Net Pay),الفرق (التوزيع - الصافي)
+Difference Not Explained by Deductions,الفرق غير المبرَّر بالخصومات
+Difference Tolerance,حد التجاوز عن الفرق
+Differences smaller than this are treated as zero.,الفروقات الأقل من هذا المبلغ تُعامل كصفر.
+Distributed Days,الأيام الموزَّعة
+Distributed Overtime Hours,ساعات الإضافي الموزَّعة
+Distributed days ({0}) cannot be more than {1}.,لا يمكن أن تزيد الأيام الموزَّعة ({0}) عن {1}.
+Distribution Summary,ملخص التوزيع
+Distribution Total,مجموع التوزيع
+Download Excel Template,تنزيل نموذج إكسل
+Earnings,الدفعات,Payroll Distribution
+Employee share of GOSI for employees of the GOSI nationality.,حصة الموظف من التأمينات للموظفين من جنسية التأمينات.
+Employee {0} belongs to company {1}.,الموظف {0} تابع للشركة {1}.
+Employee {0} was not found.,الموظف {0} غير موجود.
+Employees,الموظفون
+Employees Not Distributed,موظفون غير موزَّعين
+Employees Without Salary,موظفون بدون راتب
+Employees whose nationality is this country pay GOSI.,الموظفون من هذه الجنسية تُخصم منهم التأمينات.
+Employer share of GOSI for employees of the GOSI nationality.,حصة الشركة من التأمينات للموظفين من جنسية التأمينات.
+February,فبراير
+Filled by the Additional Salary that Employee Advance creates when it is repaid from salary.,يُعبَّأ من الراتب الإضافي الذي تنشئه سلفة الموظف عند سدادها من الراتب.
+GOSI,التأمينات
+GOSI Applicable,تنطبق عليه التأمينات
+GOSI Employee Component,بند تأمينات الموظف
+GOSI Employee Rate,نسبة تأمينات الموظف
+GOSI Employer,تأمينات الشركة
+GOSI Employer Component,بند تأمينات الشركة
+GOSI Employer Rate,نسبة تأمينات الشركة
+GOSI Nationality,جنسية التأمينات
+GOSI Salary Cap,الحد الأعلى لراتب التأمينات
+GOSI is calculated on the monthly salary up to this amount. Leave 0 for no cap.,تُحسب التأمينات على الراتب الشهري حتى هذا المبلغ. اتركه 0 بدون حد أعلى.
+Has Salary Structure,له هيكل راتب
+Hourly Rate,أجر الساعة
+Hourly rate = daily rate ÷ this number.,أجر الساعة = أجر اليوم ÷ هذا الرقم.
+Hours per Day,ساعات اليوم
+Hours per Day must be greater than zero.,يجب أن تكون ساعات اليوم أكبر من صفر.
+Import from Excel,استيراد من إكسل
+Importing...,جارٍ الاستيراد...
+Inclusive Salary,الراتب الشامل
+Inclusive Salary Component,بند الراتب الشامل
+January,يناير
+Journal Entry per,القيد المحاسبي لكل
+Journal Entry {0} was cancelled. The other {1} salary slips in it were posted again in {2}.,تم إلغاء القيد {0}، وأُعيد ترحيل رواتب الموظفين الآخرين فيه ({1}) في القيد {2}.
+July,يوليو
+June,يونيو
+Late Hours,ساعات التأخير
+Late hours x hourly rate.,ساعات التأخير × أجر الساعة.
+Lateness,التأخير
+Lateness Component,بند التأخير
+Leave empty to use the company's Default Payroll Payable Account.,اتركه فارغاً لاستخدام حساب الرواتب المستحقة الافتراضي للشركة.
+March,مارس
+May,مايو
+Missing Account,حساب غير محدد
+Monthly Inputs,المتغيرات الشهرية
+Monthly Salary Entry,إدخال الرواتب الشهرية
+Monthly salary on a fixed days-per-month basis. Days before joining or after relieving are left out.,الراتب الشهري على أساس عدد أيام ثابت للشهر، وتُستبعد الأيام قبل المباشرة أو بعد انتهاء الخدمة.
+Nationality,الجنسية
+Net Salary,الراتب الصافي
+No more employees in this month.,لا يوجد موظفون آخرون في هذا الشهر.
+No salary slips for this month yet.,لا توجد رواتب لهذا الشهر بعد.
+No salary slips for this month yet. Use Month > Open Month to prepare them.,لا توجد رواتب لهذا الشهر بعد. استخدم الشهر > فتح الشهر لتجهيزها.
+Not Distributed,غير موزَّع
+Not Explained by Deductions,غير مبرَّر بالخصومات
+Not Saved,غير محفوظ
+November,نوفمبر
+October,أكتوبر
+Only Unexplained Differences,الفروقات غير المبرَّرة فقط
+Only unposted salary slips can be deleted.,يمكن حذف الرواتب غير المرحَّلة فقط.
+Open Month,فتح الشهر
+Open Salary Slip,فتح مستند الراتب
+Other Deduction,خصومات أخرى
+Other Deduction Component,بند الخصومات الأخرى
+Other Deduction Remark,سبب الخصم
+Other Deductions,خصومات أخرى
+Outstanding Advance Balance,رصيد السلفة المتبقي
+Overtime,الإضافي
+Overtime Component,بند الإضافي
+Overtime Hours,ساعات الإضافي
+Overtime Hours Distributed,ساعات الإضافي الموزَّعة
+Overtime Hours Entered,ساعات الإضافي المُدخلة
+Overtime Multiplier,معامل الإضافي
+Overtime Value,قيمة الإضافي
+Overtime hours x hourly rate x overtime multiplier.,ساعات الإضافي × أجر الساعة × معامل الإضافي.
+Payable Days,أيام الاستحقاق
+Payroll Distribution,توزيع الرواتب
+Payroll Distribution Settings,إعدادات توزيع الرواتب
+Payroll Payable Account,حساب الرواتب المستحقة
+Post Employee,ترحيل الموظف
+Post Month,ترحيل الشهر
+"Post Month creates one journal entry for all posted slips, or one per employee.",ترحيل الشهر ينشئ قيداً واحداً لكل الرواتب المرحَّلة، أو قيداً لكل موظف.
+Post every unposted salary slip of this month? Slips without a cost center distribution are skipped and listed.,ترحيل جميع رواتب هذا الشهر غير المرحَّلة؟ الرواتب التي ليس لها توزيع على مراكز التكلفة تُترك وتظهر أسماؤها.
+"Post the salary of {0}? This creates the journal entry, and the slip can no longer be edited.",ترحيل راتب {0}؟ سيُنشأ القيد المحاسبي ولن يمكن تعديل الراتب بعد ذلك.
+Posted,مرحَّل
+Posted Salaries Only,الرواتب المرحَّلة فقط
+Posted to cost centers by overtime hours. Every other earning is posted by days.,يُرحَّل على مراكز التكلفة حسب ساعات الإضافي، وباقي الاستحقاقات حسب الأيام.
+Posted {0} salary slips.,تم ترحيل {0} راتب.
+Posting the month...,جارٍ ترحيل الشهر...
+Posting {0} salary slips in the background. You'll get a message when it's done.,جارٍ ترحيل {0} راتب في الخلفية، وستصلك رسالة عند الانتهاء.
+Posting...,جارٍ الترحيل...
+Preparing salary slips...,جارٍ تجهيز الرواتب...
+Preparing {0} salary slips in the background. You'll get a message when it's done.,جارٍ تجهيز {0} راتب في الخلفية، وستصلك رسالة عند الانتهاء.
+"Puts the days and overtime hours not yet distributed on the selected row, or on the last row.",يضع الأيام وساعات الإضافي غير الموزَّعة على السطر المحدد، أو على آخر سطر.
+Quantity,العدد
+Rate,القيمة
+Row {0}: choose a cost center.,السطر {0}: اختر مركز التكلفة.
+Row {0}: cost center {1} is already in the distribution. Merge the rows.,السطر {0}: مركز التكلفة {1} موجود مسبقاً في التوزيع. ادمج السطرين.
+Row {0}: days and overtime hours cannot be negative.,السطر {0}: لا يمكن أن تكون الأيام أو ساعات الإضافي بالسالب.
+Row {0}: days cannot be more than {1}.,السطر {0}: لا يمكن أن تزيد الأيام عن {1}.
+"Row {0}: {1} must be an active, non-group cost center of company {2}.",السطر {0}: يجب أن يكون {1} مركز تكلفة فعّالاً وغير رئيسي في الشركة {2}.
+Salaries {0} ({1} employees),رواتب {0} ({1} موظف)
+Salary Components,بنود الراتب
+Salary Cost by Cost Center,تكلفة الرواتب حسب مركز التكلفة
+Salary Details,تفاصيل الراتب
+Salary Differences,فروقات الرواتب
+Salary Payment,طريقة تسليم الراتب
+Salary Slip Cost Center,مركز تكلفة الراتب
+Salary Slip {0} for {1} has no cost center distribution. Add at least one cost center before posting.,راتب {1} ({0}) ليس له توزيع على مراكز التكلفة. أضف مركز تكلفة واحداً على الأقل قبل الترحيل.
+Salary Slip {0} is already posted.,الراتب {0} مرحَّل مسبقاً.
+Salary Slip {0} is already posted. Cancel and amend it to make changes.,الراتب {0} مرحَّل مسبقاً. ألغِه ثم عدِّله لإجراء أي تغيير.
+Salary Slip {0} is in {1}. Only salaries in the company currency ({2}) can be posted from here.,الراتب {0} بعملة {1}. يمكن من هنا ترحيل الرواتب بعملة الشركة ({2}) فقط.
+Salary slips of different companies cannot share one journal entry.,لا يمكن ترحيل رواتب شركات مختلفة في قيد واحد.
+Salary slips: {0},الرواتب: {0}
+Salary {0} - {1},راتب {0} - {1}
+Save to recalculate the salary and the difference.,احفظ لإعادة حساب الراتب والفرق.
+Saved,تم الحفظ
+Saving...,جارٍ الحفظ...
+September,سبتمبر
+"Set the Default Payroll Payable Account for company {0}, or set one in Payroll Distribution Settings.",حدد حساب الرواتب المستحقة الافتراضي للشركة {0}، أو حدده في إعدادات توزيع الرواتب.
+Set the account for salary component {0} for company {1} before posting.,حدد حساب بند الراتب {0} للشركة {1} قبل الترحيل.
+Set the liability account for employer contribution {0} for company {1} before posting.,حدد حساب الالتزام لحصة الشركة {0} للشركة {1} قبل الترحيل.
+Show or hide the list,إظهار أو إخفاء القائمة
+Someone else changed this salary slip after you opened it. Reload it and enter your changes again.,قام مستخدم آخر بتعديل هذا الراتب بعد أن فتحته. أعد تحميله وأدخل تعديلاتك مرة أخرى.
+Sponsor (Kafeel),الكفيل
+Staff Type,نوع الموظف
+"The salary components the entry screen fills in. Use the button to create them with their formulas, then add their accounts and put them in your Salary Structures.",بنود الراتب التي تعبّئها شاشة الإدخال. استخدم الزر لإنشائها بمعادلاتها، ثم أضف حساباتها وضعها في هياكل الرواتب.
+The salary slip is already posted.,الراتب مرحَّل مسبقاً.
+There are no unposted salary slips for this month.,لا توجد رواتب غير مرحَّلة لهذا الشهر.
+These employees could not be prepared:,تعذّر تجهيز رواتب هؤلاء الموظفين:
+These rows were not imported:,لم يتم استيراد هذه الأسطر:
+These salary slips were not posted:,لم يتم ترحيل هذه الرواتب:
+This salary slip is already posted.,هذا الراتب مرحَّل مسبقاً.
+Total Deductions,مجموع الحسميات
+Total Earnings,مجموع الدفعات
+Unexplained Difference,الفرق غير المبرَّر
+Updated {0} salary slips.,تم تحديث {0} راتب.
+"When this is the employee's only row, its days and overtime hours follow the salary details automatically.",إذا كان هذا هو السطر الوحيد للموظف، تتبع أيامه وساعات إضافيه تفاصيل الراتب تلقائياً.
+Worker,عامل
+You have unsaved changes for this employee. Discard them?,لديك تعديلات غير محفوظة لهذا الموظف. هل تريد تجاهلها؟
+row {0},السطر {0}
+{0} cannot be negative.,لا يمكن أن يكون {0} بالسالب.
+{0} has no salary slip for this month.,{0} ليس له راتب لهذا الشهر.
+{0} must be between 0 and 100.,يجب أن يكون {0} بين 0 و 100.
+"{0} salary slips this month: {1} posted, {2} with an unexplained difference.",{0} راتب هذا الشهر: {1} مرحَّل، و{2} بفرق غير مبرَّر.
