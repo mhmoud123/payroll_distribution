@@ -4,15 +4,20 @@
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_fields
 
+LINK_ACCESS_DOCTYPES = ("Company", "Cost Center")
+LINK_ACCESS_ROLES = ("HR User", "HR Manager")
+
 
 def after_install():
 	create_custom_fields(get_custom_fields(), ignore_validate=True)
 	create_salary_components()
 	set_default_settings()
+	grant_link_access()
 
 
 def after_migrate():
 	create_custom_fields(get_custom_fields(), ignore_validate=True)
+	grant_link_access()
 
 
 def before_uninstall():
@@ -21,7 +26,40 @@ def before_uninstall():
 			name = frappe.db.get_value("Custom Field", {"dt": doctype, "fieldname": df["fieldname"]})
 			if name:
 				frappe.delete_doc("Custom Field", name, ignore_permissions=True, force=True)
+	frappe.db.delete(
+		"Custom DocPerm",
+		{"parent": ("in", LINK_ACCESS_DOCTYPES), "role": ("in", LINK_ACCESS_ROLES), "read": 0, "select": 1},
+	)
 	frappe.clear_cache()
+
+
+def grant_link_access():
+	"""Let the HR roles pick companies and cost centers on the page and in the reports: Select only.
+
+	ERPNext gives them no access to these doctypes, and a Link field needs at least Select. A rule
+	already set for the role is left as it is."""
+	from frappe.permissions import setup_custom_perms
+
+	for doctype in LINK_ACCESS_DOCTYPES:
+		setup_custom_perms(doctype)
+		for role in LINK_ACCESS_ROLES:
+			if frappe.db.exists(
+				"Custom DocPerm", {"parent": doctype, "role": role, "permlevel": 0, "if_owner": 0}
+			):
+				continue
+			frappe.get_doc(
+				{
+					"doctype": "Custom DocPerm",
+					"parent": doctype,
+					"parenttype": "DocType",
+					"parentfield": "permissions",
+					"role": role,
+					"permlevel": 0,
+					"read": 0,
+					"select": 1,
+				}
+			).insert(ignore_permissions=True)
+		frappe.clear_cache(doctype=doctype)
 
 
 def get_custom_fields():

@@ -11,7 +11,11 @@ frappe.pages["monthly-salary-entry"].on_page_load = function (wrapper) {
 };
 
 frappe.pages["monthly-salary-entry"].on_page_show = function (wrapper) {
-	wrapper.salary_entry && wrapper.salary_entry.context && wrapper.salary_entry.refresh_month();
+	const entry = wrapper.salary_entry;
+	if (entry && entry.context) {
+		entry.refresh_month();
+		entry.reload_employee();
+	}
 };
 
 frappe.provide("payroll_distribution");
@@ -41,7 +45,7 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		this.payload = null;
 		this.slips = [];
 		this.dirty = false;
-		this.cc_rows = [];
+		this.cc_row_count = 0;
 		this.add_style();
 		this.make_filters();
 		this.make_body();
@@ -49,12 +53,18 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		this.setup_realtime();
 
 		frappe.call("payroll_distribution.api.get_page_context").then((r) => {
-			this.context = r.message;
-			this.filters.company.set_value(this.context.company);
-			this.filters.month.set_value(String(this.context.month));
-			this.filters.year.set_value(this.context.year);
-			this.toggle_permitted_actions();
-			this.refresh_month();
+			const context = r.message;
+			// Set the filters before `context`, so their change events don't each reload the month
+			Promise.all([
+				this.filters.company.set_value(context.company),
+				this.filters.month.set_value(String(context.month)),
+				this.filters.year.set_value(context.year),
+			]).then(() => {
+				this.context = context;
+				this.shown_period = this.period();
+				this.toggle_permitted_actions();
+				this.refresh_month();
+			});
 		});
 	}
 
@@ -92,9 +102,10 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 				filters: { company: this.company(), status: ["!=", "Inactive"] },
 			}),
 			change: () => {
+				if (this.restoring_filters) return;
 				const employee = this.filters.employee.get_value();
 				if (employee && (!this.payload || this.current_employee() !== employee)) {
-					this.load_employee(employee);
+					this.go_to_employee(employee);
 				}
 			},
 		});
@@ -200,11 +211,18 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 
 	make_cost_center_grid() {
 		const me = this;
+		// Editing days or hours can untick Auto on the same row: redraw it.
+		const refresh_cell = (field) => {
+			if (field.grid_row && field.grid_row.doc === field.doc) {
+				field.grid_row.refresh_field("follow_salary_details");
+			}
+		};
 		const on_quantity_change = function () {
 			// A row edited by hand stops following the salary details
 			if (this.doc && ["basic_days", "ot_hours"].includes(this.df.fieldname)) {
 				this.doc.follow_salary_details = 0;
 			}
+			refresh_cell(this);
 			me.mark_dirty();
 			me.update_cost_center_preview();
 		};
@@ -218,7 +236,6 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 					cannot_add_rows: false,
 					in_place_edit: true,
 					data: [],
-					get_data: () => this.cc_rows,
 					fields: [
 						{
 							fieldname: "cost_center",
@@ -272,6 +289,7 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 							in_list_view: 1,
 							columns: 1,
 							onchange: function () {
+								refresh_cell(this);
 								me.mark_dirty();
 							},
 						},
@@ -281,6 +299,13 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		});
 		this.cc_group.make();
 		this.cc_field = this.cc_group.fields_dict.cost_centers;
+		// New rows get a unique name: the grid finds rows by name when deleting and editing.
+		this.cc_field.df.on_add_row = (row_idx) => {
+			const row = this.cc_field.df.data[row_idx - 1];
+			if (row) row.name = this.new_cc_row_name();
+		};
+		// The grid has no redraw or delete event outside a form; it triggers "change" after every redraw.
+		this.$body.find(".pd-cc-grid").on("change", () => this.on_cc_grid_redraw());
 
 		$(`<button class="btn btn-default btn-xs">${__("Assign Remaining")}</button>`)
 			.appendTo(this.$body.find(".pd-cc-actions"))
@@ -300,7 +325,7 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		);
 		frappe.ui.keys.add_shortcut({
 			shortcut: "ctrl+s",
-			action: () => this.save(),
+			action: () => this.save_from_keyboard(),
 			page: this.page,
 			description: __("Save"),
 			ignore_inputs: true,
@@ -405,6 +430,7 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 				this.show_open_result(data);
 			}
 			this.refresh_month();
+			this.reload_employee();
 		});
 	}
 
@@ -440,6 +466,12 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		return slip && slip.docstatus === 0;
 	}
 
+	over_tolerance(amount) {
+		// Differences up to the tolerance are rounding, not differences to look into
+		const tolerance = flt(this.context && this.context.difference_tolerance) || 0.01;
+		return Math.abs(flt(amount)) - tolerance > 1e-9;
+	}
+
 	mark_dirty() {
 		if (this.loading || !this.is_editable()) return;
 		this.dirty = true;
@@ -448,37 +480,74 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 
 	confirm_discard(proceed) {
 		if (!this.dirty) return proceed();
-		frappe.confirm(__("You have unsaved changes for this employee. Discard them?"), () => {
-			this.dirty = false;
-			proceed();
+		frappe.confirm(
+			__("You have unsaved changes for this employee. Discard them?"),
+			() => {
+				this.dirty = false;
+				proceed();
+			},
+			// Kept the changes: put the filters back on the month and employee being edited
+			() => this.restore_filters()
+		);
+	}
+
+	restore_filters() {
+		const shown = { ...this.shown_period, employee: this.current_employee() };
+		const changes = Object.keys(shown)
+			.filter((key) => shown[key] && String(this.filters[key].get_value()) !== String(shown[key]))
+			.map((key) => this.filters[key].set_value(shown[key]));
+		if (!changes.length) return;
+		this.restoring_filters = true;
+		Promise.all(changes).finally(() => {
+			this.restoring_filters = false;
 		});
 	}
 
 	on_period_change() {
-		if (!this.context) return;
+		if (!this.context || this.restoring_filters) return;
 		this.confirm_discard(() => {
-			this.refresh_month().then(() => {
-				const employee = this.filters.employee.get_value();
-				if (employee) this.load_employee(employee);
-			});
+			this.shown_period = this.period();
+			const employee = this.filters.employee.get_value();
+			if (employee) {
+				this.load_employee(employee);
+			} else {
+				this.clear_slip();
+			}
+			this.refresh_month();
 		});
+	}
+
+	clear_slip() {
+		// Nothing picked for the new month: don't leave the previous month's slip on screen
+		this.load_request = (this.load_request || 0) + 1;
+		this.payload = null;
+		this.dirty = false;
+		this.$body.find(".pd-slip, .pd-no-slip").addClass("hidden");
+		this.$body.find(".pd-placeholder").removeClass("hidden");
+		this.page.clear_indicator();
 	}
 
 	// ------------------------------------------------------------ month
 
 	refresh_month() {
-		if (!this.period_ready()) return Promise.resolve();
+		if (!this.period_ready()) {
+			this.slips = [];
+			this.render_month_bar();
+			return Promise.resolve();
+		}
+		// Only the latest request is shown, so a slow answer for the previous month can't replace it
+		const request = (this.month_request = (this.month_request || 0) + 1);
 		return frappe.call("payroll_distribution.api.get_month_slips", this.period()).then((r) => {
+			if (request !== this.month_request) return;
 			this.slips = r.message || [];
 			this.render_month_bar();
 		});
 	}
 
 	render_month_bar() {
-		const tolerance = flt(this.context.difference_tolerance) || 0.01;
 		const posted = this.slips.filter((s) => s.docstatus === 1).length;
-		const unexplained = this.slips.filter(
-			(s) => Math.abs(flt(s.custom_unexplained_difference)) >= tolerance
+		const unexplained = this.slips.filter((s) =>
+			this.over_tolerance(s.custom_unexplained_difference)
 		).length;
 		const label = this.slips.length
 			? __("{0} salary slips this month: {1} posted, {2} with an unexplained difference.", [
@@ -495,7 +564,7 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		const rows = this.slips
 			.map((s) => {
 				const flag =
-					Math.abs(flt(s.custom_unexplained_difference)) >= tolerance
+					this.over_tolerance(s.custom_unexplained_difference)
 						? `<span class="indicator-pill red">${format_currency(
 								s.custom_unexplained_difference
 							)}</span>`
@@ -548,6 +617,12 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		this.go_to_employee(this.slips[next].employee);
 	}
 
+	reload_employee() {
+		// The slip may have changed elsewhere. Unsaved edits stay: Save reports the conflict.
+		const employee = this.current_employee();
+		if (employee && !this.dirty && this.period_ready()) this.load_employee(employee);
+	}
+
 	go_to_employee(employee) {
 		this.confirm_discard(() => this.load_employee(employee));
 	}
@@ -559,13 +634,18 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 			frappe.msgprint(__("Choose the company, month and year first."));
 			return;
 		}
+		// Only the latest request is shown: answers can come back out of order when the
+		// employee is changed quickly (typing in the picker, Previous/Next).
+		const request = (this.load_request = (this.load_request || 0) + 1);
 		return frappe
 			.call({
 				method: "payroll_distribution.api.get_slip",
 				args: { ...this.period(), employee, create },
 				freeze: !!create,
 			})
-			.then((r) => this.render(r.message));
+			.then((r) => {
+				if (request === this.load_request) this.render(r.message);
+			});
 	}
 
 	render(payload) {
@@ -602,9 +682,7 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		this.values_set = this.inputs.set_values(slip.inputs);
 		this.render_totals(slip);
 
-		this.cc_rows = (slip.cost_centers || []).map((row) => ({ ...row }));
-		this.cc_field.df.data = this.cc_rows;
-		this.cc_field.grid.refresh();
+		this.set_cc_rows(slip.cost_centers || []);
 		this.render_cc_summary();
 
 		this.set_read_only(slip.docstatus !== 0);
@@ -752,6 +830,65 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 
 	// ------------------------------------------------------------ cost centers
 
+	set_cc_rows(rows) {
+		// Frappe reuses a grid row's in-place editors when its data changes, but the editors keep
+		// writing to the row object they were made for. After loading another employee (or saving),
+		// edits would land in the old objects and never reach the save. Drop the rows so the grid
+		// builds them again on the new data.
+		const grid = this.cc_field.grid;
+		(grid.grid_rows || []).forEach((grid_row) => grid_row.wrapper && grid_row.wrapper.remove());
+		grid.grid_rows = [];
+		grid.grid_rows_by_docname = {};
+
+		this.cc_row_count = rows.length;
+		this.cc_field.df.data = rows.map((row) => ({ ...row, name: this.new_cc_row_name() }));
+		grid.refresh();
+	}
+
+	new_cc_row_name() {
+		// Frappe names unnamed rows "row <idx>", which repeats after a delete and an add
+		this.cc_row_seq = (this.cc_row_seq || 0) + 1;
+		return `pd-cc-${this.cc_row_seq}`;
+	}
+
+	on_cc_grid_redraw() {
+		(this.cc_field.grid.grid_rows || []).forEach((grid_row) => {
+			// Frappe stores an editor's change handler on the column definition, which every row of
+			// the grid shares, so all rows ran the handler of the first row ever edited: the edit went
+			// to the right data but the cell went on showing its old value. Give each row's editors
+			// their own copy of the column definition.
+			if (!grid_row.pd_own_columns) {
+				grid_row.pd_own_columns = true;
+				const make_control = grid_row.make_control;
+				grid_row.make_control = function (column) {
+					if (!column.field) {
+						column.df = { ...column.df };
+						delete column.df.change;
+					}
+					return make_control.call(this, column);
+				};
+			}
+			// On a redraw the grid can move a row's data to another line (after a delete, for example)
+			// but keeps that line's editors on the old data. Point every editor at its line's data.
+			(grid_row.on_grid_fields || []).forEach((field) => {
+				if (grid_row.doc && field.doc !== grid_row.doc) {
+					field.doc = grid_row.doc;
+					field.docname = grid_row.doc.name;
+					field.refresh();
+				}
+			});
+		});
+
+		// A row was deleted: the page has unsaved changes and the totals move.
+		const count = this.grid_rows().length;
+		const removed = count < this.cc_row_count;
+		this.cc_row_count = count;
+		if (removed && !this.loading && this.is_editable()) {
+			this.mark_dirty();
+			this.update_cost_center_preview();
+		}
+	}
+
 	grid_rows() {
 		return (
 			(this.cc_field.grid.get_data && this.cc_field.grid.get_data()) ||
@@ -785,16 +922,17 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		if (!slip) return;
 		const rows = this.grid_rows();
 		const c = slip.currency;
-		const tolerance = flt(this.context && this.context.difference_tolerance) || 0.01;
 		const days = rows.reduce((sum, r) => sum + flt(r.basic_days), 0);
 		const hours = rows.reduce((sum, r) => sum + flt(r.ot_hours), 0);
-		const total = rows.reduce((sum, r) => sum + flt(r.row_total), 0);
+		// As the server values it: the rows are split from these totals, so they add up to them
+		const total =
+			flt(days * slip.daily_rate, 2) +
+			flt(hours * slip.hourly_rate * slip.overtime_multiplier, 2);
 		const difference = preview ? flt(total - slip.net_pay, 2) : slip.distribution_difference;
 		const unexplained = preview
 			? flt(difference - (slip.distribution_difference - slip.unexplained_difference), 2)
 			: slip.unexplained_difference;
-		const cls = (v) =>
-			Math.abs(flt(v)) >= tolerance ? "text-danger font-weight-bold" : "text-success";
+		const cls = (v) => (this.over_tolerance(v) ? "text-danger font-weight-bold" : "text-success");
 
 		this.$body.find(".pd-cc-summary").html(`
 			<div class="pd-summary-grid">
@@ -831,7 +969,7 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 		this.$body
 			.find(".pd-tab-flag")
 			.html(
-				Math.abs(flt(unexplained)) >= tolerance
+				this.over_tolerance(unexplained)
 					? `<span class="indicator-pill red">${__("Difference")}</span>`
 					: ""
 			);
@@ -880,7 +1018,7 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 				method: "payroll_distribution.api.save_slip",
 				args: {
 					name: slip.name,
-					values: this.inputs.get_values(true),
+					values: this.input_values(),
 					cost_centers: rows,
 					modified: slip.modified,
 				},
@@ -892,6 +1030,21 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 				frappe.show_alert({ message: __("Saved"), indicator: "green" });
 				this.refresh_month();
 			});
+	}
+
+	input_values() {
+		// FieldGroup.get_values() leaves out empty fields, and the server keeps what it isn't sent
+		const values = {};
+		Object.values(this.inputs.fields_dict).forEach((field) => {
+			if (field.get_value) values[field.df.fieldname] = field.get_value();
+		});
+		return values;
+	}
+
+	save_from_keyboard() {
+		// The cell being typed in writes to its row on blur, which a shortcut doesn't cause
+		if (document.activeElement) document.activeElement.blur();
+		return frappe.timeout(0.1).then(() => frappe.after_ajax(() => this.save()));
 	}
 
 	ensure_saved() {
@@ -1025,6 +1178,14 @@ payroll_distribution.MonthlySalaryEntry = class MonthlySalaryEntry {
 					[result.count]
 				)
 			);
+			return;
+		}
+		if (result.error) {
+			frappe.msgprint({
+				title: __("Post Month"),
+				message: __("Nothing was posted: {0}", [frappe.utils.escape_html(result.error)]),
+				indicator: "red",
+			});
 			return;
 		}
 		const entries = (result.journal_entries || [])

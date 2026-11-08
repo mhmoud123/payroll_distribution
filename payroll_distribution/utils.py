@@ -79,16 +79,19 @@ def component_amount(doc, component, parentfield="deductions"):
 
 
 def split_amount(amount, weights, precision=2):
-	"""Split `amount` across `weights` [(key, weight)], putting the rounding remainder on the last share."""
+	"""Split `amount` across `weights` [(key, weight)]. The shares add up to exactly `amount`.
+
+	Each share is taken from what is left, so none can go negative. A share that rounds to nothing is
+	left out: a journal entry refuses a line with no amount."""
 	weights = [(k, flt(w)) for k, w in weights if flt(w) > 0]
-	if not weights:
-		return []
-	total_weight = sum(w for _k, w in weights)
-	amount = flt(amount, precision)
-	result, allocated = [], 0.0
-	for key, weight in weights[:-1]:
-		share = flt(amount * weight / total_weight, precision)
-		allocated += share
-		result.append((key, share))
-	result.append((weights[-1][0], flt(amount - allocated, precision)))
+	remaining = flt(amount, precision)
+	remaining_weight = sum(w for _k, w in weights)
+	result = []
+	for i, (key, weight) in enumerate(weights):
+		is_last = i == len(weights) - 1
+		share = remaining if is_last else flt(remaining * weight / remaining_weight, precision)
+		remaining = flt(remaining - share, precision)
+		remaining_weight -= weight
+		if share:
+			result.append((key, share))
 	return result

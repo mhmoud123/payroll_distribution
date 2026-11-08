@@ -206,3 +206,19 @@ Calculated on each slip and posted to the GOSI accounts set on the Company.,تُ
 Set the {0} on company {1} before posting the employer share of GOSI.,حدد {0} في الشركة {1} قبل ترحيل نصيب الشركة من التأمينات.
 {0} {1} does not belong to company {2}.,{0} {1} لا يتبع الشركة {2}.
 Wrong Account,حساب غير صحيح
+"Row {0}: {1} must be a number. Found: {2}","الصف {0}: يجب أن تكون قيمة {1} رقمًا. القيمة الموجودة: {2}"
+Salary Slip {0} for {1} has no days or overtime hours on its cost centers. Enter them before posting.,كشف الراتب {0} للموظف {1} لا يحتوي على أيام أو ساعات إضافي في مراكز التكلفة. أدخلها قبل الترحيل.
+Payroll Payable Account {0} must be a liability account that is not a group.,يجب أن يكون حساب الرواتب المستحقة {0} حساب التزامات وليس حسابًا رئيسيًا.
+Nothing was posted: {0},لم يتم ترحيل أي شيء: {0}
+Journal Entry {0} has been paid by {1}. Cancel the payment first.,تم سداد القيد {0} بواسطة {1}. ألغِ السداد أولًا.
+Already Paid,تم السداد
+This month is already being posted. You'll get a message when it's done.,جارٍ ترحيل هذا الشهر بالفعل. ستصلك رسالة عند الانتهاء.
+Salary Slip {0} belongs to Payroll Entry {1}. Post it from there.,كشف الراتب {0} تابع لقيد الرواتب {1}. قم بترحيله من هناك.
+Journal Entry {0} is the posting of Salary Slip {1}. Cancel the salary slip instead.,القيد {0} هو ترحيل كشف الراتب {1}. ألغِ كشف الراتب بدلًا من ذلك.
+Posted by a Salary Slip,مرحَّل من كشف راتب
+This file could not be read. Upload the Excel template as an .xlsx file.,تعذّرت قراءة هذا الملف. ارفع نموذج إكسل بصيغة xlsx.
+This file is not in the template layout. Use Month > Download Excel Template.,هذا الملف لا يطابق النموذج. استخدم الشهر > تنزيل نموذج إكسل.
+"This file is for {0}, but the page is on {1}.",هذا الملف لشهر {0} بينما الصفحة على شهر {1}.
+This row has no employee code.,هذا الصف بدون رمز موظف.
+Row {0}: enter the monthly inputs on the employee's first row only.,الصف {0}: أدخل المتغيرات الشهرية في أول صف للموظف فقط.
+Posted in Ledger,المرحَّل في الحسابات

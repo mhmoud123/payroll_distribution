@@ -72,8 +72,9 @@ def deductions_by_slip(slip_names):
 	return result
 
 
-def tolerance():
-	return flt(get_settings().difference_tolerance) or 0.01
+def is_over_tolerance(amount):
+	"""Differences up to the tolerance are rounding, not differences to look into."""
+	return abs(flt(amount)) - (flt(get_settings().difference_tolerance) or 0.01) > 1e-9
 
 
 def status_label(docstatus):

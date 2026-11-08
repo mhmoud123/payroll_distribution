@@ -20,6 +20,7 @@ from payroll_distribution.utils import (
 	get_salary_base,
 	get_settings,
 	is_valid_cost_center,
+	split_amount,
 )
 
 FLOAT_EPSILON = 1e-6
@@ -41,6 +42,8 @@ def before_validate(doc, method=None):
 
 	nationality = frappe.db.get_value("Employee", doc.employee, "custom_nationality")
 	doc.custom_gosi_applicable = 1 if settings.gosi_country and nationality == settings.gosi_country else 0
+	if not doc.custom_gosi_applicable:
+		remove_gosi_deduction(doc, settings.gosi_component)
 	doc.custom_gosi_employee_rate = flt(settings.gosi_employee_rate)
 	doc.custom_gosi_employer_rate = flt(settings.gosi_employer_rate)
 	doc.custom_gosi_salary_cap = flt(settings.gosi_salary_cap)
@@ -77,9 +80,9 @@ def validate(doc, method=None):
 
 	validate_cost_centers(doc, days_basis)
 
+	set_row_amounts(rows, "basic_days", "basic_amount", daily_rate, precision)
+	set_row_amounts(rows, "ot_hours", "ot_amount", hourly_rate * multiplier, precision)
 	for row in rows:
-		row.basic_amount = flt(flt(row.basic_days) * daily_rate, precision)
-		row.ot_amount = flt(flt(row.ot_hours) * hourly_rate * multiplier, precision)
 		row.row_total = flt(row.basic_amount + row.ot_amount, precision)
 
 	doc.custom_distributed_days = sum(flt(r.basic_days) for r in rows)
@@ -98,10 +101,20 @@ def validate(doc, method=None):
 
 
 def before_submit(doc, method=None):
+	if doc.payroll_entry:
+		return
 	if not doc.get("custom_cost_centers"):
 		frappe.throw(
 			_(
 				"Salary Slip {0} for {1} has no cost center distribution. Add at least one cost center before posting."
+			).format(doc.name, doc.employee_name or doc.employee),
+			title=_("Not Distributed"),
+		)
+	has_quantities = any(flt(r.basic_days) or flt(r.ot_hours) for r in doc.custom_cost_centers)
+	if not has_quantities and (flt(doc.custom_payable_days) or flt(doc.custom_ot_hours)):
+		frappe.throw(
+			_(
+				"Salary Slip {0} for {1} has no days or overtime hours on its cost centers. Enter them before posting."
 			).format(doc.name, doc.employee_name or doc.employee),
 			title=_("Not Distributed"),
 		)
@@ -122,6 +135,29 @@ def on_cancel(doc, method=None):
 	from payroll_distribution.accounting import cancel_journal_entry_for_slip
 
 	cancel_journal_entry_for_slip(doc)
+
+
+def remove_gosi_deduction(doc, component):
+	"""HRMS leaves a component's previous amount on the slip when its condition turns false."""
+	if component:
+		doc.set(
+			"deductions",
+			[
+				d
+				for d in doc.get("deductions") or []
+				if d.salary_component != component or d.additional_salary
+			],
+		)
+
+
+def set_row_amounts(rows, quantity_field, amount_field, rate, precision):
+	"""Value the rows by splitting the total: rounded one by one they drift from it by a cent or more."""
+	total = flt(sum(flt(row.get(quantity_field)) for row in rows) * rate, precision)
+	shares = dict(
+		split_amount(total, [(i, row.get(quantity_field)) for i, row in enumerate(rows)], precision)
+	)
+	for i, row in enumerate(rows):
+		row.set(amount_field, shares.get(i, 0))
 
 
 def get_base(doc):

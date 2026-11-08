@@ -11,7 +11,7 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
-from payroll_distribution.report_utils import deductions_by_slip, get_slips, status_label, tolerance
+from payroll_distribution.report_utils import deductions_by_slip, get_slips, is_over_tolerance, status_label
 from payroll_distribution.utils import get_settings
 
 
@@ -59,10 +59,9 @@ def get_columns():
 
 def get_data(filters):
 	settings = get_settings()
-	limit = tolerance()
-	slips = [s for s in get_slips(filters) if abs(flt(s.custom_distribution_difference)) >= limit]
+	slips = [s for s in get_slips(filters) if is_over_tolerance(s.custom_distribution_difference)]
 	if filters.get("only_unexplained"):
-		slips = [s for s in slips if abs(flt(s.custom_unexplained_difference)) >= limit]
+		slips = [s for s in slips if is_over_tolerance(s.custom_unexplained_difference)]
 
 	deductions = deductions_by_slip([s.name for s in slips])
 	named = {
@@ -87,6 +86,7 @@ def get_data(filters):
 				"distribution_total": slip.custom_distribution_total,
 				"difference": slip.custom_distribution_difference,
 				"unexplained": slip.custom_unexplained_difference,
+				"is_unexplained": is_over_tolerance(slip.custom_unexplained_difference),
 			}
 		)
 		data.append(row)

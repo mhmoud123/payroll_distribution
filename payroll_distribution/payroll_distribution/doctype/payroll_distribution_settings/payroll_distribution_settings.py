@@ -18,6 +18,20 @@ class PayrollDistributionSettings(Document):
 		for field in ("gosi_employee_rate", "gosi_employer_rate"):
 			if not 0 <= flt(self.get(field)) <= 100:
 				frappe.throw(_("{0} must be between 0 and 100.").format(_(self.meta.get_label(field))))
+		self.validate_payable_account()
+
+	def validate_payable_account(self):
+		if not self.payroll_payable_account:
+			return
+		root_type, is_group = frappe.db.get_value(
+			"Account", self.payroll_payable_account, ["root_type", "is_group"]
+		)
+		if root_type != "Liability" or is_group:
+			frappe.throw(
+				_("Payroll Payable Account {0} must be a liability account that is not a group.").format(
+					frappe.bold(self.payroll_payable_account)
+				)
+			)
 
 	@frappe.whitelist()
 	def create_salary_components(self):

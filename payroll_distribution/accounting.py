@@ -42,6 +42,8 @@ def make_journal_entry(slips):
 	accounts = []
 	for slip in slips:
 		accounts.extend(get_slip_accounts(slip, precision))
+	if not accounts:
+		return None  # nothing to post, for example a slip with no pay
 
 	je = frappe.new_doc("Journal Entry")
 	je.voucher_type = "Journal Entry"
@@ -214,9 +216,9 @@ def get_gosi_employer_accounts(company):
 
 
 def get_payroll_payable_account(company):
-	account = get_settings().payroll_payable_account or frappe.get_cached_value(
-		"Company", company, "default_payroll_payable_account"
-	)
+	account = get_settings().payroll_payable_account
+	if not account or frappe.get_cached_value("Account", account, "company") != company:
+		account = frappe.get_cached_value("Company", company, "default_payroll_payable_account")
 	if not account:
 		frappe.throw(
 			_(
@@ -253,27 +255,117 @@ def get_advance_recoveries(slip):
 	return {r.additional_salary: r for r in rows}
 
 
+def before_cancel_journal_entry(doc, method=None):
+	"""A posted salary's entry goes when its slip is cancelled, which unlinks the slip first. Cancelled
+	on its own, HRMS would just unlink the slip and leave it posted with nothing in the ledger."""
+	slip = frappe.db.get_value(
+		"Salary Slip", {"journal_entry": doc.name, "docstatus": 1, "payroll_entry": ("is", "not set")}
+	)
+	if slip:
+		frappe.throw(
+			_("Journal Entry {0} is the posting of Salary Slip {1}. Cancel the salary slip instead.").format(
+				frappe.bold(doc.name), frappe.bold(slip)
+			),
+			title=_("Posted by a Salary Slip"),
+		)
+
+
+def validate_not_paid(je_name, employee):
+	"""Refuse to cancel a salary that has been paid: ERPNext would just remove a payment's reference."""
+	payment = (
+		frappe.db.get_value(
+			"Journal Entry Account",
+			{
+				"reference_type": "Journal Entry",
+				"reference_name": je_name,
+				"docstatus": 1,
+				"parent": ("!=", je_name),
+			},
+			"parent",
+		)
+		or frappe.db.get_value(
+			"Payment Entry Reference",
+			{"reference_doctype": "Journal Entry", "reference_name": je_name, "docstatus": 1},
+			"parent",
+		)
+		or find_payment_by_balance(je_name, employee)
+	)
+	if payment:
+		frappe.throw(
+			_("Journal Entry {0} has been paid by {1}. Cancel the payment first.").format(
+				frappe.bold(je_name), frappe.bold(payment)
+			),
+			title=_("Already Paid"),
+		)
+
+
+def find_payment_by_balance(je_name, employee):
+	"""A payment covering this salary that doesn't name its journal entry, as an ordinary bank entry doesn't.
+
+	Payments are matched to what the employee is owed oldest first, so this salary is paid once the
+	employee's payments go beyond what they were owed before it.
+	"""
+	account = frappe.db.get_value(
+		"Journal Entry Account",
+		{
+			"parent": je_name,
+			"party_type": "Employee",
+			"party": employee,
+			"reference_type": ("is", "not set"),
+		},
+		"account",
+	)
+	if not account:
+		return None
+	posting_date = frappe.db.get_value("Journal Entry", je_name, "posting_date")
+	entries = frappe.get_all(
+		"GL Entry",
+		filters={"account": account, "party_type": "Employee", "party": employee, "is_cancelled": 0},
+		fields=["voucher_type", "voucher_no", "posting_date", "debit", "credit"],
+		order_by="posting_date asc, creation asc",
+	)
+	owed_before = sum(flt(e.credit) for e in entries if e.posting_date < posting_date)
+	payments = [
+		e
+		for e in entries
+		if flt(e.debit) and e.voucher_type in ("Journal Entry", "Payment Entry") and e.voucher_no != je_name
+	]
+	if sum(flt(e.debit) for e in payments) > owed_before + 0.005:
+		return payments[-1].voucher_no
+	return None
+
+
 def cancel_journal_entry_for_slip(slip):
 	"""Cancel the slip's journal entry. If the entry also covered other slips, post them again in a new entry."""
 	je_name = slip.journal_entry or frappe.db.get_value("Salary Slip", slip.name, "journal_entry")
-	if not je_name or frappe.db.get_value("Journal Entry", je_name, "docstatus") != 1:
+	if not je_name:
 		return
+	validate_not_paid(je_name, slip.employee)
 
 	others = frappe.get_all(
 		"Salary Slip",
 		filters={"journal_entry": je_name, "docstatus": 1, "name": ("!=", slip.name)},
 		pluck="name",
 	)
+	# Unlink the slips first, so that the cancel's link check only stops on real dependents such as
+	# a payment. The cancelled slip stays unlinked: an amended copy can't link a cancelled entry.
+	frappe.db.set_value(
+		"Salary Slip", {"journal_entry": je_name}, "journal_entry", None, update_modified=False
+	)
+	slip.journal_entry = None
+	if frappe.db.get_value("Journal Entry", je_name, "docstatus") != 1:
+		return
+
 	je = frappe.get_doc("Journal Entry", je_name)
-	je.flags.ignore_links = True
 	je.flags.ignore_permissions = True
 	je.cancel()
 
 	if others:
 		new_je = make_journal_entry([frappe.get_doc("Salary Slip", name) for name in others])
-		frappe.msgprint(
-			_(
-				"Journal Entry {0} was cancelled. The other {1} salary slips in it were posted again in {2}."
-			).format(frappe.bold(je_name), len(others), frappe.bold(new_je.name)),
-			alert=True,
-		)
+		if new_je:
+			frappe.msgprint(
+				_(
+					"Journal Entry {0} was cancelled. The other {1} salary slips in it were posted again in {2}."
+				).format(frappe.bold(je_name), len(others), frappe.bold(new_je.name)),
+				alert=True,
+			)

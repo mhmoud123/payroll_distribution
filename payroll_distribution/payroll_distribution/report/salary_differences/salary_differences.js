@@ -11,7 +11,7 @@ frappe.query_reports["Salary Differences"] = {
 	]),
 	formatter(value, row, column, data, default_formatter) {
 		value = default_formatter(value, row, column, data);
-		if (column.fieldname === "unexplained" && data && Math.abs(data.unexplained || 0) >= 0.01) {
+		if (column.fieldname === "unexplained" && data && data.is_unexplained) {
 			value = `<span class="text-danger font-weight-bold">${value}</span>`;
 		}
 		return value;

@@ -2,6 +2,12 @@
 // For license information, please see license.txt
 
 frappe.ui.form.on("Payroll Distribution Settings", {
+	setup(frm) {
+		frm.set_query("payroll_payable_account", () => ({
+			filters: { root_type: "Liability", is_group: 0 },
+		}));
+	},
+
 	refresh(frm) {
 		frm.add_custom_button(__("Monthly Salary Entry"), () => {
 			frappe.set_route("monthly-salary-entry");

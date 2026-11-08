@@ -4,10 +4,12 @@
 """Server side of the Monthly Salary Entry page."""
 
 import json
+import math
 
 import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate
+from frappe.utils.background_jobs import is_job_enqueued
 
 from payroll_distribution.utils import get_period, get_settings
 
@@ -20,14 +22,22 @@ INPUT_FIELDS = (
 )
 COST_CENTER_FIELDS = ("cost_center", "basic_days", "ot_hours", "follow_salary_details")
 BACKGROUND_THRESHOLD = 40
+PAGE_ROLES = ("HR User", "HR Manager", "System Manager")
 
 
 # ---------------------------------------------------------------- reading
 
 
+def check_page_access():
+	"""Every Employee can read Salary Slip (User Permissions limit them to their own), so reading the
+	doctype is not enough for these endpoints, which return other people's salaries."""
+	frappe.only_for(PAGE_ROLES)
+	frappe.has_permission("Salary Slip", "read", throw=True)
+
+
 @frappe.whitelist()
 def get_page_context():
-	frappe.has_permission("Salary Slip", "read", throw=True)
+	check_page_access()
 	settings = get_settings()
 	company = frappe.defaults.get_user_default("Company") or frappe.db.get_single_value(
 		"Global Defaults", "default_company"
@@ -49,9 +59,9 @@ def get_page_context():
 
 @frappe.whitelist()
 def get_month_slips(company, month, year):
-	frappe.has_permission("Salary Slip", "read", throw=True)
+	check_page_access()
 	start, end = get_period(month, year)
-	return frappe.get_all(
+	return frappe.get_list(
 		"Salary Slip",
 		filters={"company": company, "start_date": start, "end_date": end, "docstatus": ("<", 2)},
 		fields=[
@@ -69,11 +79,14 @@ def get_month_slips(company, month, year):
 
 @frappe.whitelist()
 def get_slip(company, month, year, employee, create=0):
-	frappe.has_permission("Salary Slip", "read", throw=True)
+	check_page_access()
 	start, end = get_period(month, year)
 	name = find_slip(employee, company, start, end)
 	if name:
-		return slip_payload(frappe.get_doc("Salary Slip", name))
+		doc = frappe.get_doc("Salary Slip", name)
+		doc.check_permission("read")
+		return slip_payload(doc)
+	frappe.has_permission("Employee", "read", doc=employee, throw=True)
 	if not cint(create):
 		return {"slip": None, "header": get_employee_header(employee)}
 	frappe.has_permission("Salary Slip", "create", throw=True)
@@ -173,6 +186,7 @@ def post_employee(name):
 	doc.check_permission("submit")
 	if doc.docstatus != 0:
 		frappe.throw(_("Salary Slip {0} is already posted.").format(name))
+	validate_not_from_payroll_entry(doc)
 	doc.submit()  # on_submit creates the journal entry
 	doc.reload()
 	return slip_payload(doc)
@@ -182,7 +196,7 @@ def post_employee(name):
 def post_month(company, month, year):
 	frappe.has_permission("Salary Slip", "submit", throw=True)
 	start, end = get_period(month, year)
-	names = frappe.get_all(
+	names = frappe.get_list(
 		"Salary Slip",
 		filters={"company": company, "start_date": start, "end_date": end, "docstatus": 0},
 		pluck="name",
@@ -191,10 +205,15 @@ def post_month(company, month, year):
 	if not names:
 		frappe.throw(_("There are no unposted salary slips for this month."))
 	if len(names) > BACKGROUND_THRESHOLD:
+		job_id = f"pd_post_month::{company}::{start}"
+		if is_job_enqueued(job_id):
+			frappe.throw(_("This month is already being posted. You'll get a message when it's done."))
 		frappe.enqueue(
-			"payroll_distribution.api.post_slips",
+			"payroll_distribution.api.post_slips_in_background",
 			queue="long",
 			timeout=3600,
+			job_id=job_id,
+			deduplicate=True,
 			names=names,
 			notify_user=frappe.session.user,
 		)
@@ -202,7 +221,7 @@ def post_month(company, month, year):
 	return post_slips(names)
 
 
-def post_slips(names, notify_user=None):
+def post_slips(names):
 	"""Submit each slip in its own savepoint, then create the journal entry for those that went through.
 
 	If the journal entry itself fails (for example a missing account), the error is raised and the
@@ -213,8 +232,11 @@ def post_slips(names, notify_user=None):
 	try:
 		for name in names:
 			doc = frappe.get_doc("Salary Slip", name)
+			if doc.docstatus != 0:
+				continue  # posted after this list was made: a queued job can run after another one
 			frappe.db.savepoint("pd_post_month")
 			try:
+				validate_not_from_payroll_entry(doc)
 				doc.submit()
 				submitted.append(doc)
 			except frappe.ValidationError as e:
@@ -232,25 +254,39 @@ def post_slips(names, notify_user=None):
 
 	from payroll_distribution.accounting import make_journal_entry
 
-	journal_entries = []
-	if submitted:
-		if get_settings().journal_entry_per == "Employee":
-			journal_entries = [make_journal_entry([doc]).name for doc in submitted]
-		else:
-			journal_entries = [make_journal_entry(submitted).name]
+	if get_settings().journal_entry_per == "Employee":
+		entries = [make_journal_entry([doc]) for doc in submitted]
+	else:
+		entries = [make_journal_entry(submitted)]
 
-	result = {
+	return {
 		"submitted": len(submitted),
 		"refused": refused,
-		"journal_entries": journal_entries,
+		"journal_entries": [je.name for je in entries if je],
 		"queued": False,
 	}
-	if notify_user:
-		frappe.db.commit()  # nosemgrep: background job
-		frappe.publish_realtime(
-			"payroll_distribution_done", {"action": "post_month", **result}, user=notify_user
+
+
+def validate_not_from_payroll_entry(doc):
+	if doc.payroll_entry:
+		frappe.throw(
+			_("Salary Slip {0} belongs to Payroll Entry {1}. Post it from there.").format(
+				doc.name, doc.payroll_entry
+			)
 		)
-	return result
+
+
+def post_slips_in_background(names, notify_user):
+	"""Post the slips and always tell the user the outcome; a failure posts nothing."""
+	try:
+		result = post_slips(names)
+	except Exception as e:
+		error = last_error_message(e)
+		frappe.db.rollback()
+		frappe.log_error(title="Post Month failed")
+		result = {"submitted": 0, "refused": [], "journal_entries": [], "queued": False, "error": error}
+	frappe.db.commit()  # nosemgrep: background job
+	frappe.publish_realtime("payroll_distribution_done", {"action": "post_month", **result}, user=notify_user)
 
 
 # ---------------------------------------------------------------- Excel
@@ -264,20 +300,23 @@ TEMPLATE_HEADER = [
 	"Other Deduction / خصومات أخرى",
 	"Other Deduction Remark / سبب الخصم",
 	"Cost Center / مركز التكلفة",
-	"Days / الأيام",
-	"Cost Center Overtime Hours / ساعات الإضافي للمركز",
+	"Days (blank = Auto) / الأيام (فارغ = تلقائي)",
+	"Cost Center Overtime Hours (blank = Auto) / ساعات الإضافي للمركز (فارغ = تلقائي)",
+	"Month / الشهر",
 ]
+MONTH_COLUMN = len(TEMPLATE_HEADER) - 1
 
 
 @frappe.whitelist(methods=["GET"])
 def download_template(company, month, year):
 	"""Excel file of the month's draft slips: one row per cost center; inputs on each employee's first row."""
-	frappe.has_permission("Salary Slip", "read", throw=True)
+	check_page_access()
 	from frappe.utils.xlsxutils import build_xlsx_response
 
 	start, end = get_period(month, year)
+	period = template_period(month, year)
 	data = [TEMPLATE_HEADER]
-	for slip in frappe.get_all(
+	for slip in frappe.get_list(
 		"Salary Slip",
 		filters={"company": company, "start_date": start, "end_date": end, "docstatus": 0},
 		pluck="name",
@@ -297,70 +336,147 @@ def download_template(company, month, year):
 				if i == 0
 				else ["", "", "", "", ""]
 			)
+			follows = row.get("follow_salary_details")
 			data.append(
 				[
 					doc.employee,
 					doc.employee_name,
 					*inputs,
 					row.get("cost_center") or "",
-					row.get("basic_days"),
-					row.get("ot_hours"),
+					None if follows else row.get("basic_days"),
+					None if follows else row.get("ot_hours"),
+					period,
 				]
 			)
-	build_xlsx_response(data, f"salary-entry-{cint(year)}-{cint(month):02d}")
+	build_xlsx_response(data, f"salary-entry-{period}")
 
 
 @frappe.whitelist()
 def import_month(company, month, year, file_url):
 	"""Apply an Excel sheet in the template layout. Each employee is saved on its own; errors are listed per employee."""
 	frappe.has_permission("Salary Slip", "write", throw=True)
-	from frappe.utils.xlsxutils import read_xlsx_file_from_attached_file
-
 	start, end = get_period(month, year)
-	rows = read_xlsx_file_from_attached_file(file_url=file_url) or []
-	grouped = {}
-	for excel_row, values in enumerate(rows[1:], start=2):
-		values = list(values) + [None] * (len(TEMPLATE_HEADER) - len(values))
-		employee = str(values[0]).strip() if values[0] is not None else ""
-		if not employee:
-			continue
-		entry = grouped.setdefault(employee, {"row": excel_row, "inputs": None, "cost_centers": []})
-		if entry["inputs"] is None and any(v not in (None, "") for v in values[2:7]):
-			entry["inputs"] = {
-				"custom_ot_hours": flt(values[2]),
-				"custom_late_hours": flt(values[3]),
-				"custom_absent_days": flt(values[4]),
-				"custom_other_deduction": flt(values[5]),
-				"custom_other_deduction_remark": values[6] or "",
-			}
-		if values[7]:
-			entry["cost_centers"].append(
-				{
-					"cost_center": str(values[7]).strip(),
-					"basic_days": flt(values[8]),
-					"ot_hours": flt(values[9]),
-				}
-			)
+	grouped, errors = group_excel_rows(read_template_rows(file_url, month, year))
 
-	updated, errors = 0, []
+	updated = 0
 	for employee, entry in grouped.items():
 		frappe.db.savepoint("pd_import")
 		try:
+			if entry["second_inputs_row"]:
+				frappe.throw(
+					_("Row {0}: enter the monthly inputs on the employee's first row only.").format(
+						entry["second_inputs_row"]
+					)
+				)
 			name = find_slip(employee, company, start, end)
 			doc = frappe.get_doc("Salary Slip", name) if name else new_slip(employee, company, start, end)
 			if doc.docstatus != 0:
 				frappe.throw(_("The salary slip is already posted."))
 			doc.check_permission("write")
 			if entry["inputs"] is not None:
-				apply_inputs(doc, entry["inputs"])
+				apply_inputs(doc, read_excel_inputs(*entry["inputs"]))
 			if entry["cost_centers"]:
-				apply_cost_centers(doc, entry["cost_centers"])
+				apply_cost_centers(doc, read_excel_cost_centers(entry["cost_centers"]))
 			doc.save()
 			updated += 1
 		except Exception as e:
 			frappe.db.rollback(save_point="pd_import")
 			errors.append({"employee": employee, "row": entry["row"], "error": last_error_message(e)})
 	return {"updated": updated, "errors": errors}
+
+
+def read_template_rows(file_url, month, year):
+	"""The data rows of an uploaded sheet, once it is known to be this month's template."""
+	from frappe.utils.xlsxutils import read_xlsx_file_from_attached_file
+
+	try:
+		rows = read_xlsx_file_from_attached_file(file_url=file_url) or []
+	except Exception:
+		frappe.throw(_("This file could not be read. Upload the Excel template as an .xlsx file."))
+	header = [cell_text(value) for value in (rows[0] if rows else [])[: len(TEMPLATE_HEADER)]]
+	if header != TEMPLATE_HEADER:
+		frappe.throw(_("This file is not in the template layout. Use Month > Download Excel Template."))
+
+	period = template_period(month, year)
+	other_months = {cell_text(row[MONTH_COLUMN]) for row in rows[1:] if len(row) > MONTH_COLUMN} - {
+		"",
+		period,
+	}
+	if other_months:
+		frappe.throw(
+			_("This file is for {0}, but the page is on {1}.").format(", ".join(sorted(other_months)), period)
+		)
+	return rows[1:]
+
+
+def group_excel_rows(rows):
+	"""The sheet's rows per employee, and the rows that belong to nobody. A row with neither an employee
+	code nor a name continues the employee above it."""
+	grouped, errors, last_employee = {}, [], ""
+	for excel_row, values in enumerate(rows, start=2):
+		values = list(values) + [None] * (len(TEMPLATE_HEADER) - len(values))
+		if not any(cell_text(value) for value in values[:MONTH_COLUMN]):
+			continue
+		employee = cell_text(values[0]) or ("" if cell_text(values[1]) else last_employee)
+		if not employee:
+			errors.append({"employee": "", "row": excel_row, "error": _("This row has no employee code.")})
+			continue
+		last_employee = employee
+		entry = grouped.setdefault(
+			employee, {"row": excel_row, "inputs": None, "second_inputs_row": None, "cost_centers": []}
+		)
+		if any(cell_text(value) for value in values[2:7]):
+			if entry["inputs"] is None:
+				entry["inputs"] = (excel_row, values)
+			elif values[2:7] != entry["inputs"][1][2:7] and not entry["second_inputs_row"]:
+				entry["second_inputs_row"] = excel_row
+		if cell_text(values[7]):
+			entry["cost_centers"].append((excel_row, values))
+	return grouped, errors
+
+
+def read_excel_inputs(excel_row, values):
+	return {
+		"custom_ot_hours": excel_number(values[2], "Overtime Hours", excel_row),
+		"custom_late_hours": excel_number(values[3], "Late Hours", excel_row),
+		"custom_absent_days": excel_number(values[4], "Absence Days", excel_row),
+		"custom_other_deduction": excel_number(values[5], "Other Deduction", excel_row),
+		"custom_other_deduction_remark": values[6] or "",
+	}
+
+
+def read_excel_cost_centers(rows):
+	"""A single row with its days and hours blank follows the salary details: the template leaves Auto rows blank."""
+	follows = len(rows) == 1 and not cell_text(rows[0][1][8]) and not cell_text(rows[0][1][9])
+	return [
+		{
+			"cost_center": cell_text(values[7]),
+			"basic_days": excel_number(values[8], "Days", excel_row),
+			"ot_hours": excel_number(values[9], "Overtime Hours", excel_row),
+			"follow_salary_details": 1 if follows else 0,
+		}
+		for excel_row, values in rows
+	]
+
+
+def excel_number(value, label, excel_row):
+	if value is None or value == "":
+		return 0.0
+	try:
+		number = float(str(value).strip().replace(",", ""))
+	except ValueError:
+		number = math.nan
+	if not math.isfinite(number):
+		frappe.throw(_("Row {0}: {1} must be a number. Found: {2}").format(excel_row, _(label), value))
+	return number
+
+
+def cell_text(value):
+	return "" if value is None else str(value).strip()
+
+
+def template_period(month, year):
+	return f"{cint(year)}-{cint(month):02d}"
 
 
 # ---------------------------------------------------------------- helpers

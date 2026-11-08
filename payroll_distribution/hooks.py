@@ -26,6 +26,9 @@ doc_events = {
 		"on_submit": "payroll_distribution.overrides.salary_slip.on_submit",
 		"on_cancel": "payroll_distribution.overrides.salary_slip.on_cancel",
 	},
+	"Journal Entry": {
+		"before_cancel": "payroll_distribution.accounting.before_cancel_journal_entry",
+	},
 }
 
 # Fixtures

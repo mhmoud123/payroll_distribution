@@ -38,15 +38,19 @@ Requires Frappe v15, ERPNext v15 and HRMS v15 (Python 3.10 or later). The same c
 - Cost-center rows: days × daily rate + overtime hours × hourly rate × multiplier.
 - **Balancing is on money**: difference = distribution total − net salary. It never blocks; it shows at
   the foot of the cost-center tab and on the Salary Differences report, next to the deductions that can
-  explain it (advance, GOSI, lateness, other) and the part they don't explain.
-- A slip with no cost-center rows can't be posted.
+  explain it (advance, GOSI, lateness, other) and the part they don't explain. A difference up to the
+  Difference Tolerance in settings (0.01) is rounding and isn't flagged.
+- Salary Cost by Cost Center shows the distribution rows and, beside them, what is in the ledger. The
+  two differ where a slip's distribution doesn't cover its whole salary, and by the employer's GOSI.
+- A slip with no cost-center rows, or with no days or overtime hours on them while there are days to pay, can't be posted.
 
 ## Posting
 
 Post Employee submits one slip and creates its journal entry. Post Month submits every draft slip of
 the month (each in its own savepoint, so a refused slip is listed and skipped) and creates one journal
 entry for all of them (or one per employee, per settings). Submitting a slip from its own form posts it
-the same way. Slips created by a Payroll Entry are left to Payroll Entry.
+the same way. Slips created by a Payroll Entry are left to Payroll Entry: the page doesn't post them, and
+Post Month lists them as not posted. A slip with no pay is posted with no journal entry.
 
 The journal entry:
 
@@ -58,8 +62,20 @@ The journal entry:
 - credits Payroll Payable with the employee as party for the net
 
 Cancelling a posted slip cancels its journal entry. If that entry also covered other slips, they are
-posted again in a new entry automatically. If a payment is already linked to the entry, the cancel is
-refused until the payment is cancelled.
+posted again in a new entry automatically. The journal entry can't be cancelled on its own: cancel the
+slip. A salary that has been paid can't be cancelled until the payment is. A payment counts if it names
+the journal entry, or if the employee's payments on the payable account go beyond what they were owed
+before this salary (payments are matched to salaries oldest first).
+
+## Excel template
+
+Download it from Month > Download Excel Template, fill it in, and import it into the same month.
+
+- One row per cost center. A row with no employee code or name continues the employee above it.
+- Overtime, late hours, absence and other deduction go on each employee's first row only.
+- A single row with its days and hours blank follows the salary details (Auto). Typing a number in
+  either turns Auto off for that row.
+- The file records its month and is refused on any other month. The same file can be imported again.
 
 ## Installation
 
@@ -98,6 +114,10 @@ bench build --app payroll_distribution
 7. **Employee Advances account** must be of type Receivable (HRMS rule; the standard chart makes it Payable).
 8. **Payroll Distribution Settings**: set the overtime multiplier and GOSI rates once confirmed with the client.
 9. Optional: set Payroll Cost Center on each employee; new slips start from it (or from last month's split).
+
+Install and `bench migrate` give HR User and HR Manager Select permission on Company and Cost Center (a rule
+already set for those roles is left as it is): the page and reports need it to pick them, and ERPNext gives
+those roles no access.
 
 Good to know on v15: HRMS marks an Employee Advance "Returned" as soon as its Additional Salary is
 submitted, before the salary is posted. The page's Outstanding Advance Balance is read from the ledger,
